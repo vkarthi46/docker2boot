@@ -1,0 +1,141 @@
+/*---------- 1. SQL Movie-Rating Query Exercises ----------*/
+-- Q1 Find the titles of all movies directed by Steven Spielberg. 
+select title from Movie where director="Steven Spielberg";
+
+-- Q2 Find all years that have a movie that received a rating of 4 or 5, and sort them in increasing order.
+select distinct year from Movie 
+where mId in (select mID from rating where stars>3) order by year;
+
+-- Q3 Find the titles of all movies that have no ratings. 
+select distinct title from Movie 
+where mID in (select mID from Movie where mID not in (select mID from Rating));
+
+-- Q4 Some reviewers didn't provide a date with their rating. Find the names of all reviewers who have ratings with a NULL value for the date. 
+select distinct name from Reviewer 
+where rID in (select rID from Rating where ratingDate is null);
+
+-- Q5 Write a query to return the ratings data in a more readable format: reviewer name, movie title, stars, and ratingDate. Also, sort the data, first by reviewer name, then by movie title, and lastly by number of stars. 
+select name,title,stars,ratingDate 
+from Reviewer,Rating,Movie 
+where Reviewer.rID=Rating.rID and Movie.mID=Rating.mID 
+order by name, title, stars;
+
+-- Q6 For all cases where the same reviewer rated the same movie twice and gave it a higher rating the second time, return the reviewer's name and the title of the movie. 
+select name, title from Reviewer, Movie, Rating, Rating r2
+where Rating.mID=Movie.mID and Reviewer.rID=Rating.rID 
+  and Rating.rID = r2.rID and r2.mID = Movie.mID
+  and Rating.stars < r2.stars and Rating.ratingDate < r2.ratingDate;
+-- GROUP BY name, title HAVING count(*) = 1;
+
+-- Q7 For each movie that has at least one rating, find the highest number of stars that movie received. Return the movie title and number of stars. Sort by movie title. 
+select title,max(stars) from Movie, Rating 
+where Movie.mID=Rating.mID 
+group by Rating.mID order by title;
+
+-- Q8 For each movie, return the title and the 'rating spread', that is, the difference between highest and lowest ratings given to that movie. Sort by rating spread from highest to lowest, then by movie title. 
+select title,max(stars)-min(stars) as spread from Movie, Rating 
+where Movie.mID=Rating.mID group by title order by spread desc;
+
+-- Q9 Find the difference between the average rating of movies released before 1980 and the average rating of movies released after 1980. (Make sure to calculate the average rating for each movie, then the average of those averages for movies before 1980 and movies after. Don't just calculate the overall average rating before and after 1980.) 
+select  down.av1980down - up.av1980up 
+from	(select avg(avgst) as av1980up from 
+		(select title, avg(stars) avgst
+		 from Movie,Rating
+		 where year>1980 and Movie.mID=Rating.mID group by title
+		)
+	) as up,
+	(select avg(avgst) as av1980down from
+                (select title, avg(stars) avgst
+                 from Movie,Rating
+                 where year<1980 and Movie.mID=Rating.mID group by title
+                )
+        ) as down;
+
+
+/*---------- 2. SQL Movie-Rating Modification Exercises ----------*/
+-- Q1 Add the reviewer Roger Ebert to your database, with an rID of 209.
+insert into Reviewer values(209, 'Roger Ebert');
+
+-- Q2 Insert 5-star ratings by James Cameron for all movies in the database. Leave the review date as NULL.
+insert into Rating  
+select rID,mID,5,null from Reviewer, Movie  
+where name="James Cameron";
+
+-- Q3 For all movies that have an average rating of 4 stars or higher, add 25 to the release year. (Update the existing tuples; don't insert new tuples.)
+update Movie set year=year+25 where
+mID in (select mID from (select Rating.mID,avg(stars) as average  
+  from Movie, Rating where Movie.mID=Rating.mID 
+  group by Rating.mID, year) where average>=4);
+
+-- Q3
+  delete from rating where mid in(select mid from movie where stars < 4 and(year < 1970 or year >2000))
+  
+  
+  
+  # Social Network
+  
+  -- Q1 Find the names of all students who are friends with someone named Gabriel.
+select distinct name from Highschooler where ID in (select ID1 from Friend where ID2 in (select ID from Highschooler where name="Gabriel"));
+
+-- Q2 For every student who likes someone 2 or more grades younger than themselves, return that student's name and grade, and the name and grade of the student they like. 
+select distinct sName, sGrade, lName, lGrade
+from (select h1.name as sName, h1.grade sGrade, h2.name as lName, h2.grade as lGrade, h1.grade-h2.grade as gradeDiff 
+     from Highschooler h1, Likes, Highschooler h2
+     where h1.ID=ID1 and h2.ID=ID2)
+where gradeDiff>1;
+
+-- Q3 For every pair of students who both like each other, return the name and grade of both students. Include each pair only once, with the two names in alphabetical order.
+select h1.name, h1.grade, h2.name, h2.grade  from Likes l1, Likes l2, Highschooler h1, Highschooler h2
+where l1.ID1=l2.ID2 and l2.ID1=l1.ID2 and l1.ID1=h1.ID and l1.ID2=h2.ID and h1.name<h2.name;
+
+-- Q4 Find all students who do not appear in the Likes table (as a student who likes or is liked) and return their names and grades. Sort by grade, then by name within each grade.
+select name,grade from Highschooler where ID not in (select ID1 from Likes union select ID2 from Likes) order by grade, name;
+
+-- Q5 For every situation where student A likes student B, but we have no information about whom B likes (that is, B does not appear as an ID1 in the Likes table), return A and B's names and grades. 
+select distinct H1.name, H1.grade, H2.name, H2.grade
+from Highschooler H1, Likes, Highschooler H2
+where H1.ID = Likes.ID1 and Likes.ID2 = H2.ID and H2.ID not in (select ID1 from Likes);
+
+-- Q6 Find names and grades of students who only have friends in the same grade. Return the result sorted by grade, then by name within each grade. 
+select name, grade from Highschooler
+where ID not in (
+  select ID1 from Highschooler H1, Friend, Highschooler H2
+  where H1.ID = Friend.ID1 and Friend.ID2 = H2.ID and H1.grade <> H2.grade)
+order by grade, name;
+
+-- Q7 For each student A who likes a student B where the two are not friends, find if they have a friend C in common (who can introduce them!). For all such trios, return the name and grade of A, B, and C. 
+select distinct H1.name, H1.grade, H2.name, H2.grade, H3.name, H3.grade
+from Highschooler H1, Likes, Highschooler H2, Highschooler H3, Friend F1, Friend F2
+where H1.ID = Likes.ID1 and Likes.ID2 = H2.ID and
+  H2.ID not in (select ID2 from Friend where ID1 = H1.ID) and
+  H1.ID = F1.ID1 and F1.ID2 = H3.ID and
+  H3.ID = F2.ID1 and F2.ID2 = H2.ID;
+
+-- Q8 Find the difference between the number of students in the school and the number of different first names. 
+select st.sNum-nm.nNum from 
+(select count(*) as sNum from Highschooler) as st,
+(select count(distinct name) as nNum from Highschooler) as nm;
+
+-- Q9 Find the name and grade of all students who are liked by more than one other student. 
+select name, grade 
+from (select ID2, count(ID2) as numLiked from Likes group by ID2), Highschooler
+where numLiked>1 and ID2=ID;
+
+
+/*----------- Social Network Modification exercises -----------*/
+
+-- Q1 It's time for the seniors to graduate. Remove all 12th graders from Highschooler.
+delete from Highschooler
+where grade = 12;
+
+-- Q2 If two students A and B are friends, and A likes B but not vice-versa, remove the Likes tuple.
+delete from Likes
+where ID2 in (select ID2 from Friend where Likes.ID1 = ID1) and
+      ID2 not in (select L.ID1 from Likes L where Likes.ID1 = L.ID2);
+
+  -- Q3 
+insert into Friend
+select distinct F1.ID1, F2.ID2
+from Friend F1, Friend F2
+where F1.ID2 = F2.ID1 and F1.ID1<>F2.ID2 
+      and F1.ID1 not in (select F3.ID1 from Friend F3 where F3.ID2=F2.ID2);
